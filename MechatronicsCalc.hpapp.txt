@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<application>
+  <name>MechatronicsCalc</name>
+  <description>Calculator for Junior Mechatronics Exam</description>
+  <version>1.0</version>
+  <entrypoint>MainMenu</entrypoint>
+  <guid>{78a8e8f2-ca00-4893-98b9-848dcb9d72f2}</guid>
+  <type>program</type>
+</application>

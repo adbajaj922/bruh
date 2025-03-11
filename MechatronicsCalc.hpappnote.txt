@@ -1,0 +1,27 @@
+Mechatronics Calculator App
+
+This app is designed for junior-level mechatronics students preparing for exams.
+
+Modules:
+- Sample and Aliasing: Calculates Nyquist rate, checks for aliasing, and calculates aliased frequencies.
+- Waveforms: Plots sine, cosine, square, and triangle waves with adjustable parameters.
+- Frequency Domain: Provides conceptual understanding of frequency components.
+- Fourier Transforms: Includes a simplified Discrete Fourier Transform example.
+- Introduction to Sensing: Defines sensor types and calculates sensitivity.
+- 1st Order Sensors: Calculates time constants and simulates step responses.
+
+Author: Your Name
+Date: 2023-10-27
+
+Instructions:
+- Use the main menu to navigate between modules.
+- Input numerical values as prompted.
+- View plots and results in message boxes.
+- For plotting wave forms, the X axis is time, and the Y axis is the amplitude of the signal.
+- The Simplified DFT is only for example purposes, and is not a full implementation.
+
+Notes:
+- This app is intended for educational purposes.
+- Full FFT implementation is limited due to HP Prime processing constraints.
+- Error handling is included for basic input validation.
+- The GUID in the .hpapp file must be unique.
