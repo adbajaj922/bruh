@@ -1,0 +1,19 @@
+EXPORT UNITS_TargetConvert()
+BEGIN
+  // This function will be called when "Target Convert" is selected from the Units toolbar
+  
+  // Get the input expression from the user
+  LOCAL input_expr := GETEXPRESSION("Enter value with units (e.g., 5_MPa, 3/4_in):");
+  
+  // Get the target unit
+  LOCAL target_unit := INPUT("Enter target unit:");
+  
+  // Call our unified conversion function
+  LOCAL result := UnifiedConvert(input_expr, target_unit);
+  
+  // Display result to user
+  MSGBOX("Result: " + result);
+  
+  // Return the result for use in calculations
+  RETURN result;
+END;

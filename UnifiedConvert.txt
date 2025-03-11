@@ -1,0 +1,111 @@
+EXPORT UnifiedConvert(input_expr, target_unit)
+BEGIN
+  LOCAL parsed_value, base_unit, result, error_msg;
+  
+  // If input is a mathematical expression with multiple units
+  IF (POS("+", input_expr) OR POS("-", input_expr) OR POS("*", input_expr) OR POS("/", input_expr)) 
+     AND POS("_", input_expr) THEN
+    // This is a complex expression with units - handle differently
+    TRY
+      // Process complex expression with TokenizeExpression
+      LOCAL complex_result := TokenizeExpression(input_expr);
+      parsed_value := complex_result(1);
+      base_unit := complex_result(2);
+    EXCEPT
+      MSGBOX("Error processing complex expression. Please check format.");
+      RETURN "ERROR: Invalid expression format";
+    END;
+  // Check if input is a fraction or contains a fraction  
+  ELSIF POS("/", input_expr) AND NOT POS("_", input_expr) THEN
+    // Handle pure fraction without unit (e.g., "3/4")
+    parsed_value := EXPR(input_expr);
+    base_unit := "";
+  ELSIF POS("/", input_expr) AND POS("_", input_expr) THEN
+    // Handle fraction with unit (e.g., "3/4_in")
+    parsed_value := EXPR(LEFT(input_expr, POS("_", input_expr)-1));
+    base_unit := RIGHT(input_expr, SIZE(input_expr)-POS("_", input_expr));
+  ELSIF POS("_", input_expr) THEN
+    // Handle regular value with unit (e.g., "5_MPa")
+    parsed_value := EXPR(LEFT(input_expr, POS("_", input_expr)-1));
+    base_unit := RIGHT(input_expr, SIZE(input_expr)-POS("_", input_expr));
+  ELSE
+    // Handle plain number without unit
+    parsed_value := EXPR(input_expr);
+    base_unit := "";
+  END;
+  
+  // If no base unit was specified, ask for it
+  IF base_unit == "" THEN
+    base_unit := INPUT("Enter current unit (leave blank if dimensionless):");
+  END;
+  
+  // If no target unit was specified, ask for it
+  IF target_unit == "" OR target_unit == 0 THEN
+    target_unit := INPUT("Enter target unit:");
+  END;
+  
+  // Validate units
+  LOCAL all_units := UNIT_LIST();
+  LOCAL valid_base := false;
+  LOCAL valid_target := false;
+  
+  // Check if units are compound (contain * or /)
+  IF POS("*", base_unit) OR POS("/", base_unit) THEN
+    // Compound units are handled by ProcessCompoundUnit
+    valid_base := true;
+  ELSE
+    // Check against list of valid units
+    FOR i FROM 1 TO SIZE(all_units) DO
+      IF base_unit == all_units(i) THEN
+        valid_base := true;
+        BREAK;
+      END;
+    END;
+  END;
+  
+  // Same for target unit
+  IF POS("*", target_unit) OR POS("/", target_unit) THEN
+    valid_target := true;
+  ELSE
+    FOR i FROM 1 TO SIZE(all_units) DO
+      IF target_unit == all_units(i) THEN
+        valid_target := true;
+        BREAK;
+      END;
+    END;
+  END;
+  
+  // Check validity
+  IF NOT valid_base THEN
+    error_msg := "Invalid base unit: " + base_unit;
+    MSGBOX(error_msg);
+    RETURN error_msg;
+  END;
+  
+  IF NOT valid_target THEN
+    error_msg := "Invalid target unit: " + target_unit;
+    MSGBOX(error_msg);
+    RETURN error_msg;
+  END;
+  
+  // Convert to target unit, handling compound units appropriately
+  TRY
+    // Check if either unit is compound
+    IF POS("*", base_unit) OR POS("/", base_unit) OR POS("*", target_unit) OR POS("/", target_unit) THEN
+      // First convert to SI
+      LOCAL si_value := ConvertToSI(parsed_value, base_unit);
+      // Then to target
+      result := ConvertFromSI(si_value, target_unit);
+    ELSE
+      // Direct conversion for simple units
+      result := ConvertToUnit(parsed_value, base_unit, target_unit);
+    END;
+  EXCEPT
+    error_msg := "Error during conversion. Units may be incompatible.";
+    MSGBOX(error_msg);
+    RETURN error_msg;
+  END;
+  
+  // Format result
+  RETURN result + "_" + target_unit;
+END;
