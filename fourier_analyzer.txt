@@ -1,5 +1,18 @@
--- Fourier Transform Analyzer for TI-Nspire (Lua)
--- Supports DFT, FFT and Continuous-Time Fourier approximation
+```lua
+-- Fourier Transform Analyzer Pro for TI-Nspire (Lua)
+-- Supports DFT, FFT, Continuous-Time Fourier approximation, and plotting amplitude vs. fundamental frequency and phase vs. fundamental frequency
+
+platform.apilevel = '2.0'
+
+--------------------------
+---- Fourier Analyzer Pro ----
+----  (Mar 12, 2025)  ----
+----  LGLP 3 License  ----
+--------------------------
+----   Your Name    ----
+--------------------------
+
+local utf8 = string.uchar
 
 -- Global variables to store results
 fourier_re = {}
@@ -18,14 +31,16 @@ local current_menu = "main" -- Can be "main", "results", etc.
 -- Main menu function
 function display_main_menu(gc)
     gc:setFont("sansserif", "b", 12)
-    gc:drawString("FOURIER TRANSFORM ANALYZER", 5, 10)
+    gc:drawString("FOURIER TRANSFORM ANALYZER PRO", 5, 10)
     gc:setFont("sansserif", "r", 10)
     gc:drawString("1: Discrete Fourier Transform", 15, 40)
     gc:drawString("2: Fast Fourier Transform", 15, 60)
     gc:drawString("3: Continuous Time Fourier Series", 15, 80)
     gc:drawString("4: View Results", 15, 100)
-    gc:drawString("5: Exit", 15, 120)
-    gc:drawString("Enter your choice (1-5):", 15, 150)
+    gc:drawString("5: Plot Amplitude vs Frequency", 15, 120)
+    gc:drawString("6: Plot Phase vs Frequency", 15, 140)
+    gc:drawString("7: Exit", 15, 160)
+    gc:drawString("Enter your choice (1-7):", 15, 190)
 end
 
 -- Handler for main menu choices
@@ -40,6 +55,10 @@ function handle_main_menu(ch)
     elseif char_code == string.byte("4") then
         results_menu()
     elseif char_code == string.byte("5") then
+        plot_amplitude_vs_frequency()
+    elseif char_code == string.byte("6") then
+        plot_phase_vs_frequency()
+    elseif char_code == string.byte("7") then
         platform.window:invalidate()
     end
 end
@@ -527,7 +546,7 @@ function show_spectrum()
         g:drawPoint(i-1, fourier_phase[i])
     end
     
-    g:drawString("Phase Spectrum", 5, 5)
+    g:drawString("Phase Spectrum",5, 5)
     g:showGraph()
     
     dialog:execute("Press OK to return", "OK")
@@ -642,6 +661,76 @@ function plot_signal()
     results_menu()
 end
 
+-- Plot amplitude vs fundamental frequency
+function plot_amplitude_vs_frequency()
+    local success, graph = pcall(require, "graph")
+    
+    if not success then
+        show_message("Error: Graph module not available")
+        return
+    end
+    
+    -- Check if we have data
+    if not fourier_mag or #fourier_mag == 0 then
+        show_message("No data available. Run a transform first.")
+        return
+    end
+    
+    local g = graph.createGraph()
+    g:setBoundingBox(0, fourier_n, 0, max_in_table(fourier_mag) * 1.1)
+    g:setDrawMode(graph.DRAW_PIXELS)
+    
+    -- Plot amplitude vs frequency
+    for k = 1, #fourier_mag do
+        g:drawPoint(k-1, fourier_mag[k])
+    end
+    
+    g:drawString("Amplitude vs Fundamental Frequency", 5, 5)
+    g:showGraph()
+    
+    local dialog = platform.dialog
+    if dialog then
+        dialog:execute("Press OK to return", "OK")
+    end
+    
+    show_main_menu()
+end
+
+-- Plot phase vs fundamental frequency
+function plot_phase_vs_frequency()
+    local success, graph = pcall(require, "graph")
+    
+    if not success then
+        show_message("Error: Graph module not available")
+        return
+    end
+    
+    -- Check if we have data
+    if not fourier_phase or #fourier_phase == 0 then
+        show_message("No data available. Run a transform first.")
+        return
+    end
+    
+    local g = graph.createGraph()
+    g:setBoundingBox(0, fourier_n, -math.pi, math.pi)
+    g:setDrawMode(graph.DRAW_PIXELS)
+    
+    -- Plot phase vs frequency
+    for k = 1, #fourier_phase do
+        g:drawPoint(k-1, fourier_phase[k])
+    end
+    
+    g:drawString("Phase vs Fundamental Frequency", 5, 5)
+    g:showGraph()
+    
+    local dialog = platform.dialog
+    if dialog then
+        dialog:execute("Press OK to return", "OK")
+    end
+    
+    show_main_menu()
+end
+
 -- Helper function: Show message
 function show_message(msg)
     if platform.dialog then
@@ -676,3 +765,4 @@ end
 
 -- Initialize by showing the main menu
 show_main_menu()
+```
