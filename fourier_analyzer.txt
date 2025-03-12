@@ -1,0 +1,678 @@
+-- Fourier Transform Analyzer for TI-Nspire (Lua)
+-- Supports DFT, FFT and Continuous-Time Fourier approximation
+
+-- Global variables to store results
+fourier_re = {}
+fourier_im = {}
+fourier_mag = {}
+fourier_phase = {}
+fourier_a = {}
+fourier_b = {}
+fourier_n = 0
+fourier_t = 0
+fourier_type = ""
+
+-- State tracking
+local current_menu = "main" -- Can be "main", "results", etc.
+
+-- Main menu function
+function display_main_menu(gc)
+    gc:setFont("sansserif", "b", 12)
+    gc:drawString("FOURIER TRANSFORM ANALYZER", 5, 10)
+    gc:setFont("sansserif", "r", 10)
+    gc:drawString("1: Discrete Fourier Transform", 15, 40)
+    gc:drawString("2: Fast Fourier Transform", 15, 60)
+    gc:drawString("3: Continuous Time Fourier Series", 15, 80)
+    gc:drawString("4: View Results", 15, 100)
+    gc:drawString("5: Exit", 15, 120)
+    gc:drawString("Enter your choice (1-5):", 15, 150)
+end
+
+-- Handler for main menu choices
+function handle_main_menu(ch)
+    local char_code = string.byte(ch)
+    if char_code == string.byte("1") then
+        dft_menu()
+    elseif char_code == string.byte("2") then
+        fft_menu()
+    elseif char_code == string.byte("3") then
+        ct_menu()
+    elseif char_code == string.byte("4") then
+        results_menu()
+    elseif char_code == string.byte("5") then
+        platform.window:invalidate()
+    end
+end
+
+-- Handler for results menu choices
+function handle_results_menu(ch)
+    local char_code = string.byte(ch)
+    if char_code == string.byte("1") then
+        show_spectrum()
+    elseif char_code == string.byte("2") then
+        show_coefficients()
+    elseif char_code == string.byte("3") then
+        plot_signal()
+    elseif char_code == string.byte("4") then
+        show_main_menu()
+    end
+end
+
+-- Single charIn handler that delegates based on current_menu
+function on.charIn(ch)
+    if current_menu == "main" then
+        handle_main_menu(ch)
+    elseif current_menu == "results" then
+        handle_results_menu(ch)
+    end
+end
+
+-- Main paint event handler
+function on.paint(gc)
+    if current_menu == "main" then
+        display_main_menu(gc)
+    elseif current_menu == "results" then
+        display_results_menu(gc)
+    end
+end
+
+-- Switch to main menu
+function show_main_menu()
+    current_menu = "main"
+    platform.window:invalidate()
+end
+
+-- Discrete Fourier Transform implementation
+function compute_dft()
+    local n = fourier_n
+    local x_data = get_input_data(n)
+    
+    -- Initialize result arrays
+    fourier_re = {}
+    fourier_im = {}
+    fourier_mag = {}
+    fourier_phase = {}
+    
+    -- Compute DFT
+    for k = 0, n-1 do
+        local real_sum = 0
+        local imag_sum = 0
+        
+        for i = 0, n-1 do
+            local theta = 2 * math.pi * k * i / n
+            real_sum = real_sum + x_data[i+1] * math.cos(theta)
+            imag_sum = imag_sum - x_data[i+1] * math.sin(theta)
+        end
+        
+        fourier_re[k+1] = real_sum
+        fourier_im[k+1] = imag_sum
+        fourier_mag[k+1] = math.sqrt(real_sum^2 + imag_sum^2)
+        
+        if real_sum == 0 and imag_sum == 0 then
+            fourier_phase[k+1] = 0
+        else
+            fourier_phase[k+1] = math.atan2(imag_sum, real_sum)
+        end
+    end
+    
+    fourier_type = "DFT"
+    show_message("DFT computation complete")
+end
+
+-- Fast Fourier Transform implementation
+function compute_fft()
+    local n = fourier_n
+    local x_data = get_input_data(n)
+    
+    -- Initialize arrays
+    fourier_re = {}
+    fourier_im = {}
+    
+    -- Check that we have data and n is valid
+    if not x_data or #x_data < n then
+        show_message("Error: Invalid input data")
+        return
+    end
+    
+    -- Bit reversal permutation
+    for i = 0, n-1 do
+        local j = bit_reverse(i, math.log(n, 2))
+        fourier_re[j+1] = x_data[i+1]
+        fourier_im[j+1] = 0
+    end
+    
+    -- FFT computation
+    local p = math.log(n, 2)
+    for stage = 1, p do
+        local m = 2^stage
+        local half_m = m / 2
+        local w_real = 1
+        local w_imag = 0
+        local angle = math.pi / half_m
+        local cos_val = math.cos(angle)
+        local sin_val = math.sin(angle)
+        
+        for j = 0, half_m-1 do
+            for k = j, n-1, m do
+                local l = k + half_m
+                
+                local t_real = fourier_re[k+1]
+                local t_imag = fourier_im[k+1]
+                
+                local u_real = fourier_re[l+1] * w_real - fourier_im[l+1] * w_imag
+                local u_imag = fourier_re[l+1] * w_imag + fourier_im[l+1] * w_real
+                
+                fourier_re[k+1] = t_real + u_real
+                fourier_im[k+1] = t_imag + u_imag
+                
+                fourier_re[l+1] = t_real - u_real
+                fourier_im[l+1] = t_imag - u_imag
+            end
+            
+            local temp = w_real * cos_val - w_imag * sin_val
+            w_imag = w_real * sin_val + w_imag * cos_val
+            w_real = temp
+        end
+    end
+    
+    -- Calculate magnitude and phase
+    fourier_mag = {}
+    fourier_phase = {}
+    
+    for k = 0, n-1 do
+        fourier_mag[k+1] = math.sqrt(fourier_re[k+1]^2 + fourier_im[k+1]^2)
+        
+        if fourier_re[k+1] == 0 and fourier_im[k+1] == 0 then
+            fourier_phase[k+1] = 0
+        else
+            fourier_phase[k+1] = math.atan2(fourier_im[k+1], fourier_re[k+1])
+        end
+    end
+    
+    fourier_type = "FFT"
+    show_message("FFT computation complete")
+end
+
+-- Continuous-Time Fourier Series implementation
+function compute_ct_fourier()
+    local t = fourier_t
+    local n = fourier_n
+    local m = 200  -- Number of samples (fixed for simplicity)
+    local func = get_function_choice()
+    
+    if not func then
+        show_message("Error: Invalid function choice")
+        return
+    end
+    
+    -- Initialize arrays
+    fourier_a = {}
+    fourier_b = {}
+    
+    -- Calculate coefficients
+    local delta_x = t / m
+    
+    -- Calculate a0
+    local sum_a = 0
+    for i = 0, m-1 do
+        local x = i * delta_x
+        sum_a = sum_a + func(x)
+    end
+    fourier_a[1] = sum_a * delta_x * 2 / t
+    
+    -- Calculate an, bn
+    for k = 1, n do
+        local sum_a = 0
+        local sum_b = 0
+        
+        for i = 0, m-1 do
+            local x = i * delta_x
+            local val = func(x)
+            sum_a = sum_a + val * math.cos(2 * math.pi * k * x / t)
+            sum_b = sum_b + val * math.sin(2 * math.pi * k * x / t)
+        end
+        
+        fourier_a[k+1] = sum_a * delta_x * 2 / t
+        fourier_b[k] = sum_b * delta_x * 2 / t
+    end
+    
+    -- Compute magnitude and phase
+    fourier_mag = {}
+    fourier_phase = {}
+    
+    fourier_mag[1] = math.abs(fourier_a[1] / 2)  -- DC component
+    fourier_phase[1] = 0
+    
+    for k = 1, n do
+        fourier_mag[k+1] = math.sqrt(fourier_a[k+1]^2 + fourier_b[k]^2)
+        
+        if fourier_a[k+1] == 0 and fourier_b[k] == 0 then
+            fourier_phase[k+1] = 0
+        else
+            fourier_phase[k+1] = math.atan2(-fourier_b[k], fourier_a[k+1])
+        end
+    end
+    
+    fourier_type = "CT"
+    show_message("Fourier Series computation complete")
+end
+
+-- Helper function: Bit reversal for FFT
+function bit_reverse(n, bits)
+    local result = 0
+    for i = 0, bits-1 do
+        result = result * 2 + (n % 2)
+        n = math.floor(n / 2)
+    end
+    return result
+end
+
+-- Helper function: Get sample data from user
+function get_input_data(n)
+    local data = {}
+    local dialog = platform.inputdlg
+    
+    if not dialog then
+        show_message("Error: Input dialog not available")
+        return nil
+    end
+    
+    show_message("Enter " .. n .. " signal values")
+    
+    -- Input validation loop
+    for i = 1, n do
+        local val_input = dialog:execute("Value x(" .. (i-1) .. ")", "0")
+        if val_input then
+            local val, err = tonumber(val_input)
+            if val ~= nil then
+                data[i] = val
+            else
+                show_message("Invalid input: Please enter a number.")
+                return nil
+            end
+        else
+            show_message("Input cancelled.")
+            return nil
+        end
+    end
+    
+    return data
+end
+
+-- Helper function: Get function choice for CT Fourier
+function get_function_choice()
+    local dialog = platform.dialog
+    
+    if not dialog then
+        show_message("Error: Dialog not available")
+        return nil
+    end
+    
+    local choice = dialog:execute("Select function:", "Square Wave,Triangle Wave,Sawtooth Wave,Sine Wave,Custom")
+    
+    if choice == 1 then     -- Square Wave
+        return function(x) 
+            local mod_x = x % fourier_t
+            return (mod_x < fourier_t/2) and 1 or -1 
+        end
+    elseif choice == 2 then -- Triangle Wave
+        return function(x)
+            local mod_x = x % fourier_t
+            if mod_x < fourier_t/2 then
+                return 4 * mod_x / fourier_t - 1
+            else
+                return 3 - 4 * mod_x / fourier_t
+            end
+        end
+    elseif choice == 3 then -- Sawtooth Wave
+        return function(x)
+            local mod_x = x % fourier_t
+            return 2 * mod_x / fourier_t - 1
+        end
+    elseif choice == 4 then -- Sine Wave
+        return function(x)
+            return math.sin(2 * math.pi * x / fourier_t)
+        end
+    else                    -- Custom (simplified for this example)
+        show_message("Using simple sine wave as custom function")
+        return function(x)
+            return math.sin(2 * math.pi * x / fourier_t)
+        end
+    end
+end
+
+-- DFT menu
+function dft_menu()
+    local dialog = platform.inputdlg
+    
+    if not dialog then
+        show_message("Error: Input dialog not available")
+        return
+    end
+    
+    local n_input = dialog:execute("Sample size N (2-100):", "8")
+    
+    if n_input then
+        local n, err = tonumber(n_input)
+        if not n then
+            show_message("Invalid input: Sample size must be a number.")
+            dft_menu()
+            return
+        elseif n < 2 or n > 100 then
+            show_message("Invalid input: Sample size must be between 2 and 100.")
+            dft_menu()
+            return
+        else
+            fourier_n = n
+            compute_dft()
+            results_menu()
+        end
+    else
+        show_message("Input cancelled.")
+        show_main_menu()
+    end
+end
+
+-- FFT menu
+function fft_menu()
+    local dialog = platform.inputdlg
+    
+    if not dialog then
+        show_message("Error: Input dialog not available")
+        return
+    end
+    
+    local n_input = dialog:execute("Sample size N (power of 2):", "8")
+    
+    if n_input then
+        local n, err = tonumber(n_input)
+        if not n then
+            show_message("Invalid input: N must be a number.")
+            fft_menu()
+            return
+        elseif n < 2 or n > 1024 or (math.log(n) / math.log(2)) ~= math.floor(math.log(n) / math.log(2)) then
+            show_message("N must be a power of 2 between 2 and 1024.")
+            fft_menu()
+            return
+        else
+            fourier_n = n
+            compute_fft()
+            results_menu()
+        end
+    else
+        show_message("Input cancelled.")
+        show_main_menu()
+    end
+end
+
+-- Continuous Time Fourier menu
+function ct_menu()
+    local dialog = platform.inputdlg
+    
+    if not dialog then
+        show_message("Error: Input dialog not available")
+        return
+    end
+    
+    -- Period T input
+    local t_input = dialog:execute("Period T (or 2*pi):", "2*pi")
+    local t_value
+    
+    if t_input then
+        if t_input == "2*pi" then
+            t_value = 2 * math.pi
+        else
+            local t_num, err = tonumber(t_input)
+            if not t_num then
+                show_message("Invalid input: Period T must be a number or 2*pi.")
+                ct_menu()
+                return
+            else
+                t_value = t_num
+            end
+        end
+        fourier_t = t_value
+        
+        -- Number of coefficients N input
+        local n_input = dialog:execute("Number of coefficients N (1-50):", "10")
+        if n_input then
+            local n, err = tonumber(n_input)
+            if not n then
+                show_message("Invalid input: N must be a number.")
+                ct_menu()
+                return
+            elseif n < 1 or n > 50 then
+                show_message("Invalid input: N must be between 1 and 50.")
+                ct_menu()
+                return
+            else
+                fourier_n = n
+                compute_ct_fourier()
+                results_menu()
+            end
+        else
+            show_message("Input cancelled.")
+            show_main_menu()
+        end
+    else
+        show_message("Input cancelled.")
+        show_main_menu()
+    end
+end
+
+-- Results menu
+function results_menu()
+    current_menu = "results"
+    platform.window:invalidate()
+end
+
+function display_results_menu(gc)
+    gc:setFont("sansserif", "b",12)
+    gc:drawString("RESULTS MENU", 5, 10)
+    gc:setFont("sansserif", "r", 10)
+    gc:drawString("1: View Spectrum Plot", 15, 40)
+    gc:drawString("2: View Coefficients", 15, 60)
+    gc:drawString("3: Plot Reconstructed Signal", 15, 80)
+    gc:drawString("4: Return to Main Menu", 15, 100)
+    gc:drawString("Enter your choice (1-4):", 15, 130)
+end
+
+function on.enterKey()
+    platform.window:invalidate()
+end
+
+-- Display spectrum plots
+function show_spectrum()
+    -- Create a graph window
+    local success, graph = pcall(require, "graph")
+    
+    if not success then
+        show_message("Error: Graph module not available")
+        return
+    end
+    
+    local g = graph.createGraph()
+    
+    -- Check if we have data to plot
+    if not fourier_mag or #fourier_mag == 0 then
+        show_message("No data available. Run a transform first.")
+        return
+    end
+    
+    local max_magnitude = max_in_table(fourier_mag)
+    g:setBoundingBox(0, fourier_n, 0, 1.1 * max_magnitude)
+    g:setDrawMode(graph.DRAW_PIXELS)
+    
+    -- Plot magnitude spectrum
+    for i = 1, #fourier_mag do
+        g:drawPoint(i-1, fourier_mag[i])
+    end
+    
+    g:drawString("Magnitude Spectrum", 5, 5)
+    g:showGraph()
+    
+    local dialog = platform.dialog
+    if not dialog then
+        return
+    end
+    
+    dialog:execute("Press OK to see Phase Spectrum", "OK")
+    
+    -- Plot phase spectrum
+    g = graph.createGraph()
+    g:setBoundingBox(0, fourier_n, -math.pi, math.pi)
+    g:setDrawMode(graph.DRAW_PIXELS)
+    
+    for i = 1, #fourier_phase do
+        g:drawPoint(i-1, fourier_phase[i])
+    end
+    
+    g:drawString("Phase Spectrum", 5, 5)
+    g:showGraph()
+    
+    dialog:execute("Press OK to return", "OK")
+    results_menu()
+end
+
+-- Display coefficients
+function show_coefficients()
+    local output = ""
+    
+    -- Check if we have data
+    if (fourier_type == "CT" and (#fourier_a == 0 or #fourier_b == 0)) or 
+       (fourier_type ~= "CT" and (#fourier_re == 0 or #fourier_im == 0)) then
+        show_message("No data available. Run a transform first.")
+        return
+    end
+    
+    if fourier_type == "CT" then
+        output = "Fourier Series Coefficients:\n"
+        output = output .. "a0 = " .. round_to_str(fourier_a[1], 4) .. "\n"
+        
+        for k = 1, math.min(10, fourier_n) do
+            if fourier_a[k+1] and fourier_b[k] then
+                output = output .. "a" .. k .. " = " .. round_to_str(fourier_a[k+1], 4) .. "\n"
+                output = output .. "b" .. k .. " = " .. round_to_str(fourier_b[k], 4) .. "\n"
+            end
+        end
+    else
+        output = "DFT/FFT Coefficients:\n"
+        
+        for k = 0, math.min(10, fourier_n-1) do
+            if fourier_re[k+1] and fourier_im[k+1] then
+                output = output .. "X[" .. k .. "] = " .. round_to_str(fourier_re[k+1], 4) 
+                              .. " + " .. round_to_str(fourier_im[k+1], 4) .. "j\n"
+            end
+        end
+    end
+    
+    if fourier_n > 10 then
+        output = output .. "...\n"
+    end
+    
+    show_message(output)
+    results_menu()
+end
+
+-- Plot reconstructed signal
+function plot_signal()
+    local success, graph = pcall(require, "graph")
+    
+    if not success then
+        show_message("Error: Graph module not available")
+        return
+    end
+    
+    -- Check if we have data
+    if (fourier_type == "CT" and (#fourier_a == 0 or #fourier_b == 0)) or 
+       (fourier_type ~= "CT" and (#fourier_re == 0)) then
+        show_message("No data available. Run a transform first.")
+        return
+    end
+    
+    local g = graph.createGraph()
+    g:setDrawMode(graph.DRAW_PIXELS)
+    
+    if fourier_type == "CT" then
+        -- Set appropriate window for continuous signal
+        g:setBoundingBox(0, fourier_t, -1.5, 1.5)
+        
+        -- Sample points for plotting
+        local points = 200
+        local dx = fourier_t / points
+        
+        for i = 0, points do
+            local x = i * dx
+            local y = fourier_a[1] / 2  -- DC component
+            
+            -- Sum harmonics
+            for k = 1, fourier_n do
+                if fourier_a[k+1] and fourier_b[k] then
+                    y = y + fourier_a[k+1] * math.cos(2 * math.pi * k * x / fourier_t)
+                          + fourier_b[k] * math.sin(2 * math.pi * k * x / fourier_t)
+                end
+            end
+            
+            g:drawPoint(x, y)
+        end
+        
+        g:drawString("Reconstructed Signal", 5, 5)
+    else
+        -- Get max value for scaling
+        local max_val = max_in_table(fourier_re)
+        
+        -- Set appropriate window for discrete signal
+        g:setBoundingBox(0, fourier_n, -1.5 * max_val, 1.5 * max_val)
+        
+        -- Plot original samples
+        for i = 1, #fourier_re do
+            g:drawPoint(i-1, fourier_re[i])
+        end
+        
+        g:drawString("Original Signal Samples", 5, 5)
+    end
+    
+    g:showGraph()
+    
+    local dialog = platform.dialog
+    if dialog then
+        dialog:execute("Press OK to return", "OK")
+    end
+    
+    results_menu()
+end
+
+-- Helper function: Show message
+function show_message(msg)
+    if platform.dialog then
+        platform.dialog:execute(msg, "OK")
+    end
+end
+
+-- Helper function: Find maximum value in a table
+function max_in_table(t)
+    if not t or #t == 0 then
+        return 1
+    end
+    
+    local max_val = 0
+    for _, v in pairs(t) do
+        if math.abs(v) > max_val then
+            max_val = math.abs(v)
+        end
+    end
+    return max_val > 0 and max_val or 1
+end
+
+-- Helper function: Round to string with specific precision
+function round_to_str(num, precision)
+    if not num then
+        return "0"
+    end
+    
+    local mult = 10^(precision or 0)
+    return string.format("%." .. precision .. "f", math.floor(num * mult + 0.5) / mult)
+end
+
+-- Initialize by showing the main menu
+show_main_menu()
